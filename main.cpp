@@ -4,6 +4,8 @@
 #include <bitset>
 #include <ios>
 #include <limits>
+#include <string>
+#include <sstream>
 
 typedef char16_t word;
 
@@ -17,6 +19,27 @@ word flags;
 #define CARRY_FLAG 0b001
 #define ZERO_FLAG  0b010
 #define JUMP_FLAG  0b100
+
+// instructions
+#define NOP 0x00
+#define LDA 0x01 // Load Value from RAM into regA
+#define	STA	0x02 // Store Value from regA into RAM
+#define	ADD	0x03 // Load value from ram and add to regA
+#define	SUB	0x04
+
+#define	OUT	0x05
+
+#define	JMP	0x06
+#define	JC	0x07
+#define	JZ	0x08
+
+#define HLT 0x0a
+
+#define	LDI	0x10 // Load instantly
+#define	ADI	0x11 // Add  instantly
+
+#define	LDR	0x20 // Load Value from ROM into regA
+#define	ADR	0x21 // Add value from ROM into regA
 
 class ALU {
 public:
@@ -60,15 +83,57 @@ public:
 
 class R0M {
 public:
-	const std::array<word, 128> storage = {
-		0x1001, 0x0201, 0x1000, 0x0500, 
+	std::array<word, 128> storage = {
 		
-		0x0301, 0x0202, 0x0101, 0x0200,
-
-		0x0102, 0x0201, 0x0100, 0x0700, 
-		
-		0x0603, 0x0000, 0x0000, 0x0000
 	};
+
+  int readNumber(std::stringstream &ss){
+    int x;
+    std:: string n;
+    ss >> n;
+    return stoi(n);
+  } 
+
+  void loadRom() {
+    std::stringstream ss(assem);
+    int i = 0;
+
+    do {
+      std::string s;
+      ss >> s;  
+
+      }
+      if(s == "LDI") {
+        addToStorage(i, LDI, readNumber(ss));
+      }
+
+      else if (s == "OUT") {
+        addToStorage(i, OUT, 0);
+      } 
+
+      else if (s == "HLT") {
+        addToStorage(i, HLT, 0);
+      } else {
+        break;
+      }
+
+      i++;
+    } while (ss.peek() != EOF);
+  }
+
+private: 
+  const std::string assem = R"ASS(
+  LDI 3
+  OUT
+  HLT
+  )ASS";
+
+  void addToStorage(int i, int inst, int n) {
+    int k = 0;
+    k += inst << 0x8;
+    k += n;
+    storage[i] = k;
+  } 
 
 } Rom;
 
@@ -77,28 +142,8 @@ public:
 	std::array<word, 128> storage;
 } Ram;
 
-// instructions
-#define NOP 0x00
-#define LDA 0x01 // Load Value from RAM into regA
-#define	STA	0x02 // Store Value from regA into RAM
-#define	ADD	0x03 // Load value from ram and add to regA
-#define	SUB	0x04
-
-#define	OUT	0x05
-
-#define	JMP	0x06
-#define	JC	0x07
-#define	JZ	0x08
-
-#define HLT 0x0a
-
-#define	LDI	0x10 // Load instantly
-#define	ADI	0x11 // Add  instantly
-
-#define	LDR	0x20 // Load Value from ROM into regA
-#define	ADR	0x21 // Add value from ROM into regA
-
 int main() {
+  Rom.loadRom();
 	while (true) {
 		auto currentInstructionFull = Rom.storage[ProgramCounter.count];
 		auto instruction = (word)(currentInstructionFull >> 0x8);
