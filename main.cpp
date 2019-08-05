@@ -63,7 +63,7 @@ private:
     }
     return temp;
   }
-} Alu;
+} alu;
 
 class PROGRAMCOUNTER {
 public:
@@ -74,19 +74,24 @@ public:
     } else {
       count += 1;
     }
-  
   }
   void reset() {
     count = 0;
   }
   word count = 0;
-} ProgramCounter;
+} program_counter;
 
-class R0M {
+class ROM {
 public:
-  std::array<word, 128> storage = {};
 
-  int readNumber(std::stringstream &ss){
+  ROM() {
+    loadRom();
+  }
+
+  std::array<word, 128> storage;
+
+private:
+  int readNumber(std::stringstream &ss) {
     int x;
     std:: string n;
     ss >> n;
@@ -96,9 +101,9 @@ public:
   void loadRom() {
     std::stringstream ss(assem);
     int i = 0;
+    std::string s;
 
     do {
-      std::string s;
       ss >> s;  
 
       if(s == "NOP") {
@@ -113,7 +118,6 @@ public:
       else if(s == "STA") {
         addToStorage(i, STA, readNumber(ss));
       }
-
       else if(s == "ADD") {
         addToStorage(i, ADD, readNumber(ss));
       }
@@ -132,11 +136,9 @@ public:
       else if(s == "ADR") {
         addToStorage(i, ADR, readNumber(ss));
       }
-
       else if (s == "OUT") {
         addToStorage(i, OUT, 0);
       } 
-
       else if (s == "HLT") {
         addToStorage(i, HLT, 0);
       } else {
@@ -147,7 +149,6 @@ public:
     } while (ss.peek() != EOF);
   }
 
-private: 
   const std::string assem = R"ASS(
   LDI 1
   STA 1
@@ -176,57 +177,51 @@ private:
     storage[i] = k;
   } 
 
-} Rom;
+} rom;
 
 class RAM {
 public:
   std::array<word, 128> storage;
-} Ram;
+} ram;
 
 int main() {
-  Rom.loadRom();
   while (true) {
-    auto currentInstructionFull = Rom.storage[ProgramCounter.count];
+    auto currentInstructionFull = rom.storage[program_counter.count];
     auto instruction = (word)(currentInstructionFull >> 0x8);
     auto location = (word)(currentInstructionFull & 0x00FF);
   
     switch (instruction) {
     case NOP:
       break;
-
     // Loads ram location into regA
     case LDA: 
-      regA = Ram.storage[location];
+      regA = ram.storage[location];
       break;
     // Loads rom location into regA
     case LDR:
-      regA = Rom.storage[location];
+      regA = rom.storage[location];
       break;
     // Loads immediate value (max half of LDA and LDR)
     case LDI:
       regA = location;
       break;
-
     // Stores regA into ram 
     case STA:
-      Ram.storage[location] = regA;
+      ram.storage[location] = regA;
       break;
-
     // Adds ram value to regA
     case ADD:
-      bus = Ram.storage[location];
-      Alu.invoke();
+      bus = ram.storage[location];
+      alu.invoke();
       break;
     // Adds immediate value to regA
     case ADI:
       bus = location;
-      Alu.invoke();
+      alu.invoke();
       break;
-
     case OUT:
       std::cout << std::dec << (int)regA << std::endl;
       break;
-
     case JMP:
       bus = location;
       flags |= JUMP_FLAG;
@@ -243,11 +238,10 @@ int main() {
         flags |= JUMP_FLAG;
       }
       break;
-      
     case HLT:
       while (1);
       break;
     }
-    ProgramCounter.invoke();
+    program_counter.invoke();
   }
 }
