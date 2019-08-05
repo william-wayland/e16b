@@ -6,6 +6,7 @@
 #include <limits>
 #include <string>
 #include <sstream>
+#include <cstdlib>
 
 typedef char16_t word;
 
@@ -83,16 +84,14 @@ public:
 
 class R0M {
 public:
-	std::array<word, 128> storage = {
-		
-	};
+	std::array<word, 128> storage = {};
 
   int readNumber(std::stringstream &ss){
     int x;
     std:: string n;
     ss >> n;
     return stoi(n);
-  } 
+  }
 
   void loadRom() {
     std::stringstream ss(assem);
@@ -102,9 +101,36 @@ public:
       std::string s;
       ss >> s;  
 
+      if(s == "NOP") {
+        addToStorage(i, NOP, 0);
       }
-      if(s == "LDI") {
+      else if(s == "LDI") {
         addToStorage(i, LDI, readNumber(ss));
+      }
+      else if(s == "LDA") {
+        addToStorage(i, LDA, readNumber(ss));
+      }
+      else if(s == "STA") {
+        addToStorage(i, STA, readNumber(ss));
+      }
+
+      else if(s == "ADD") {
+        addToStorage(i, ADD, readNumber(ss));
+      }
+      else if(s == "JMP") {
+        addToStorage(i, JMP, readNumber(ss));
+      }
+      else if(s == "JZ") {
+        addToStorage(i, JZ, readNumber(ss));
+      }
+      else if(s == "JC") {
+        addToStorage(i, JC, readNumber(ss));
+      } 
+      else if(s == "LDR") {
+        addToStorage(i, LDR, readNumber(ss));
+      }
+      else if(s == "ADR") {
+        addToStorage(i, ADR, readNumber(ss));
       }
 
       else if (s == "OUT") {
@@ -123,8 +149,23 @@ public:
 
 private: 
   const std::string assem = R"ASS(
-  LDI 3
+  LDI 1
+  STA 1
+  LDI 0
+
   OUT
+
+  ADD 1
+  STA 2
+  LDA 1
+  STA 0
+  LDA 2
+  STA 1
+  LDA 0
+  
+  JC  0
+  JMP 3
+
   HLT
   )ASS";
 
