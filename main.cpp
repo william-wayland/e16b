@@ -11,12 +11,12 @@ word bus = 0;
 word regA = 0;
 word regB = 0;
 
-// 0, 0, 0, 0, 0, 0, Zero, Carry
+// 0, 0, 0, 0, 0, Jump, Zero, Carry
 word flags;
-word p;
 
-#define ZERO_FLAG 0b10
-#define CARRY_FLAG 0b01
+#define CARRY_FLAG 0b001
+#define ZERO_FLAG  0b010
+#define JUMP_FLAG  0b100
 
 class ALU {
 public:
@@ -26,10 +26,13 @@ public:
 	}
 private:
 	word add(word a, word b) {
-		flags &= ~0b0000000000000011;
+    flags &= ~(ZERO_FLAG | CARRY_FLAG); // clear flags
+
+    // If the addtion will result in a overflow
 		if (a > 0 && b > 0xFFFF - a) {
 			flags |= CARRY_FLAG;
 		}
+
 		word temp = a + b;
 		if (temp == 0) {
 			flags |= ZERO_FLAG;
@@ -41,10 +44,13 @@ private:
 class PROGRAMCOUNTER {
 public:
 	void invoke() {
-		count += 1;
-	}
-	void jump() {
-		count = bus - 1;
+    if ((flags & JUMP_FLAG) == JUMP_FLAG) {
+      count = bus;
+      flags &= ~JUMP_FLAG;
+    } else {
+      count += 1;
+    }
+		
 	}
 	void reset() {
 		count = 0;
@@ -73,14 +79,13 @@ public:
 
 // instructions
 #define NOP 0x00
-
-#define	SUB	0x04
-
-#define	ADD	0x03 // Load value from ram and add to regA
 #define LDA 0x01 // Load Value from RAM into regA
 #define	STA	0x02 // Store Value from regA into RAM
+#define	ADD	0x03 // Load value from ram and add to regA
+#define	SUB	0x04
 
 #define	OUT	0x05
+
 #define	JMP	0x06
 #define	JC	0x07
 #define	JZ	0x08
@@ -103,27 +108,30 @@ int main() {
 		case NOP:
 			break;
 
-		// Loads 
+		// Loads ram location into regA
 		case LDA: 
 			regA = Ram.storage[location];
 			break;
+    // Loads rom location into regA
 		case LDR:
 			regA = Rom.storage[location];
 			break;
+    // Loads immediate value (max half of LDA and LDR)
 		case LDI:
 			regA = location;
 			break;
 
-		// Stores
+		// Stores regA into ram 
 		case STA:
 			Ram.storage[location] = regA;
 			break;
 
-		// Arth
+		// Adds ram value to regA
 		case ADD:
 			bus = Ram.storage[location];
 			Alu.invoke();
 			break;
+    // Adds immediate value to regA
 		case ADI:
 			bus = location;
 			Alu.invoke();
@@ -135,18 +143,18 @@ int main() {
 
 		case JMP:
 			bus = location;
-			ProgramCounter.jump();
+      flags |= JUMP_FLAG;
 			break;
 		case JC:
 			if ((flags & CARRY_FLAG) == CARRY_FLAG) {
 				bus = location;
-				ProgramCounter.jump();
+        flags |= JUMP_FLAG;
 			}
 			break;
 		case JZ:
 			if ((flags & ZERO_FLAG) == ZERO_FLAG) {
 				bus = location;
-				ProgramCounter.jump();
+        flags |= JUMP_FLAG;
 			}
 			break;
 			
