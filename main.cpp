@@ -7,6 +7,9 @@
 #include <string>
 #include <sstream>
 #include <cstdlib>
+#include <string_view>
+#include <thread>
+#include <unordered_map>
 
 typedef char16_t word;
 
@@ -42,6 +45,41 @@ word flags;
 #define LDR 0x20 // Load Value from ROM into regA
 #define ADR 0x21 // Add value from ROM into regA
 
+static const std::unordered_map<std::string, uint8_t> INSTRUCTION_STR {
+  {"NOP", NOP},
+  {"LDA", LDA},
+  {"STA", STA},
+  {"ADD", ADD},
+  {"SUB", SUB},
+  {"OUT", OUT},
+  {"JMP", JMP},
+  {"JC",  JC},
+  {"JZ",  JZ},
+  {"HLT", HLT},
+  {"LDI", LDI},
+  {"ADI", ADI},
+  {"LDR", LDR},
+  {"ADR", ADR}
+} ;
+
+static const std::unordered_map<std::string, bool> INSTRUCTION_HAS_VALUE {
+  {"NOP", false},
+  {"LDA", true},
+  {"STA", true},
+  {"ADD", true},
+  {"SUB", true},
+  {"OUT", false},
+  {"JMP", true},
+  {"JC",  true},
+  {"JZ",  true},
+  {"HLT", false},
+  {"LDI", true},
+  {"ADI", true},
+  {"LDR", true},
+  {"ADR", true}
+} ;
+
+
 class ALU {
 public:
   void invoke() {
@@ -65,10 +103,10 @@ private:
   }
 } alu;
 
-class PROGRAMCOUNTER {
+class PC {
 public:
   void invoke() {
-    if ((flags & JUMP_FLAG) == JUMP_FLAG) {
+    if (flags & JUMP_FLAG) {
       count = bus;
       flags &= ~JUMP_FLAG;
     } else {
@@ -84,72 +122,59 @@ public:
 class ROM {
 public:
 
-  ROM() {
-    loadRom();
-  }
+  ROM() 
+  : storage{loadRom()}
+  {}
 
-  std::array<word, 128> storage;
+  using ROM_TYPE = std::array<word, 128>;
+
+  const ROM_TYPE storage;
 
 private:
-  int readNumber(std::stringstream &ss) {
-    int x;
-    std:: string n;
+  static uint8_t getValue(std::stringstream &ss) {
+    int n;
     ss >> n;
-    return stoi(n);
+    return n;
   }
 
-  void loadRom() {
-    std::stringstream ss(assem);
+  static word getRomEntry(uint8_t inst, uint8_t value) {
+    int k = (inst << 0x8) + value;
+    return k;
+  } 
+
+  static ROM_TYPE loadRom() {
+    std::stringstream ss(static_cast<std::string>(assem));
     int i = 0;
     std::string s;
+
+    ROM_TYPE storage{};
 
     do {
       ss >> s;  
 
-      if(s == "NOP") {
-        addToStorage(i, NOP, 0);
+      const auto ihv  = INSTRUCTION_HAS_VALUE.find(s);
+      const auto istr = INSTRUCTION_STR.find(s);
+      if (istr == INSTRUCTION_STR.end() || ihv == INSTRUCTION_HAS_VALUE.end()) {
+        std::cout << "Failed to parse assembly: Unrecognised instruction: \"" << s << "\"" << std::endl;
+        exit(-1);
       }
-      else if(s == "LDI") {
-        addToStorage(i, LDI, readNumber(ss));
-      }
-      else if(s == "LDA") {
-        addToStorage(i, LDA, readNumber(ss));
-      }
-      else if(s == "STA") {
-        addToStorage(i, STA, readNumber(ss));
-      }
-      else if(s == "ADD") {
-        addToStorage(i, ADD, readNumber(ss));
-      }
-      else if(s == "JMP") {
-        addToStorage(i, JMP, readNumber(ss));
-      }
-      else if(s == "JZ") {
-        addToStorage(i, JZ, readNumber(ss));
-      }
-      else if(s == "JC") {
-        addToStorage(i, JC, readNumber(ss));
-      } 
-      else if(s == "LDR") {
-        addToStorage(i, LDR, readNumber(ss));
-      }
-      else if(s == "ADR") {
-        addToStorage(i, ADR, readNumber(ss));
-      }
-      else if (s == "OUT") {
-        addToStorage(i, OUT, 0);
-      } 
-      else if (s == "HLT") {
-        addToStorage(i, HLT, 0);
-      } else {
-        break;
+
+      const bool has_value = ihv->second;
+      const uint8_t instruction = istr->second;
+      
+      storage[i] = (instruction << 0x8);
+      
+      if (has_value) {
+        storage[i] += getValue(ss);
       }
 
       i++;
     } while (ss.peek() != EOF);
+
+    return storage;
   }
 
-  const std::string assem = R"ASS(
+  static constexpr std::string_view assem = R"ASS(
   LDI 1
   STA 1
   LDI 0
@@ -169,13 +194,6 @@ private:
 
   HLT
   )ASS";
-
-  void addToStorage(int i, int inst, int n) {
-    int k = 0;
-    k += inst << 0x8;
-    k += n;
-    storage[i] = k;
-  } 
 
 } rom;
 
@@ -221,19 +239,20 @@ int main() {
       break;
     case OUT:
       std::cout << std::dec << (int)regA << std::endl;
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
       break;
     case JMP:
       bus = location;
       flags |= JUMP_FLAG;
       break;
     case JC:
-      if ((flags & CARRY_FLAG) == CARRY_FLAG) {
+      if (flags & CARRY_FLAG) {
         bus = location;
         flags |= JUMP_FLAG;
       }
       break;
     case JZ:
-      if ((flags & ZERO_FLAG) == ZERO_FLAG) {
+      if (flags & ZERO_FLAG) {
         bus = location;
         flags |= JUMP_FLAG;
       }
