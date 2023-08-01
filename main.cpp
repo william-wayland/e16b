@@ -11,39 +11,55 @@
 #include <thread>
 #include <unordered_map>
 
-typedef char16_t word;
+// This is the assembly which will be loaded into rom
+  static constexpr std::string_view assem = R"ASS(
+  LDI 1
+  STA 1
+  LDI 0
 
-word bus = 0;
-word regA = 0;
-word regB = 0;
+  OUT
+
+  ADD 1
+  STA 2
+  LDA 1
+  STA 0
+  LDA 2
+  STA 1
+  LDA 0
+  
+  JC  0
+  JMP 3
+
+  HLT
+  )ASS";
+
+using word = char16_t;
+
+word regA = 0; // used for general instructions
+word regB = 0; // used for ALU and JUMP instruction
 
 // 0, 0, 0, 0, 0, Jump, Zero, Carry
 word flags;
 
-#define CARRY_FLAG 0b001
-#define ZERO_FLAG  0b010
-#define JUMP_FLAG  0b100
+constexpr word CARRY_FLAG = 0b001; // Last ALU invocation resulted in overflow
+constexpr word ZERO_FLAG  = 0b010; // Last ALU invocation resulted in zero
+constexpr word JUMP_FLAG  = 0b100; // Last instruction was a JUMP type
 
 // instructions
-#define NOP 0x00
-#define LDA 0x01 // Load Value from RAM into regA
-#define STA 0x02 // Store Value from regA into RAM
-#define ADD 0x03 // Load value from ram and add to regA
-#define SUB 0x04 
-
-#define OUT 0x05
-
-#define JMP 0x06
-#define JC  0x07
-#define JZ  0x08
-
-#define HLT 0x0a
-
-#define LDI 0x10 // Load instantly
-#define ADI 0x11 // Add  instantly
-
-#define LDR 0x20 // Load Value from ROM into regA
-#define ADR 0x21 // Add value from ROM into regA
+constexpr uint8_t NOP = 0x00; // Null Operation
+constexpr uint8_t LDA = 0x01; // Load value from RAM into regA
+constexpr uint8_t STA = 0x02; // Store value from regA into RAM
+constexpr uint8_t ADD = 0x03; // Load value from ram and add to regA
+constexpr uint8_t SUB = 0x04; // Not implemented
+constexpr uint8_t OUT = 0x05; // Output regA to console
+constexpr uint8_t JMP = 0x06; // Set PC to immediate value
+constexpr uint8_t JC  = 0x07; // Set PC to immediate value if carry flag set
+constexpr uint8_t JZ  = 0x08; // Set PC to immediate value if zero flag set
+constexpr uint8_t HLT = 0x0a; // Halt program
+constexpr uint8_t LDI = 0x10; // Load immediate value into regA
+constexpr uint8_t ADI = 0x11; // Add immediate value into regA
+constexpr uint8_t LDR = 0x20; // Load Value from ROM into regA
+constexpr uint8_t ADR = 0x21; // Add value from ROM into regA
 
 static const std::unordered_map<std::string, uint8_t> INSTRUCTION_STR {
   {"NOP", NOP},
@@ -83,8 +99,7 @@ static const std::unordered_map<std::string, bool> INSTRUCTION_HAS_VALUE {
 class ALU {
 public:
   void invoke() {
-    word in = bus;
-    regA = add(in, regA);
+    regA = add(regA, regB);
   }
 private:
   word add(word a, word b) {
@@ -107,7 +122,7 @@ class PC {
 public:
   void invoke() {
     if (flags & JUMP_FLAG) {
-      count = bus;
+      count = regB;
       flags &= ~JUMP_FLAG;
     } else {
       count += 1;
@@ -173,28 +188,6 @@ private:
 
     return storage;
   }
-
-  static constexpr std::string_view assem = R"ASS(
-  LDI 1
-  STA 1
-  LDI 0
-
-  OUT
-
-  ADD 1
-  STA 2
-  LDA 1
-  STA 0
-  LDA 2
-  STA 1
-  LDA 0
-  
-  JC  0
-  JMP 3
-
-  HLT
-  )ASS";
-
 } rom;
 
 class RAM {
@@ -204,37 +197,30 @@ public:
 
 int main() {
   while (true) {
-    auto currentInstructionFull = rom.storage[program_counter.count];
-    auto instruction = (word)(currentInstructionFull >> 0x8);
-    auto location = (word)(currentInstructionFull & 0x00FF);
+    uint8_t instruction = (uint8_t)(rom.storage[program_counter.count] >> 0x8);
+    uint8_t location    = (uint8_t)(rom.storage[program_counter.count] & 0x00FF);
   
     switch (instruction) {
     case NOP:
       break;
-    // Loads ram location into regA
     case LDA: 
       regA = ram.storage[location];
       break;
-    // Loads rom location into regA
     case LDR:
       regA = rom.storage[location];
       break;
-    // Loads immediate value (max half of LDA and LDR)
     case LDI:
       regA = location;
       break;
-    // Stores regA into ram 
     case STA:
       ram.storage[location] = regA;
       break;
-    // Adds ram value to regA
     case ADD:
-      bus = ram.storage[location];
+      regB = ram.storage[location];
       alu.invoke();
       break;
-    // Adds immediate value to regA
     case ADI:
-      bus = location;
+      regB = location;
       alu.invoke();
       break;
     case OUT:
@@ -242,18 +228,18 @@ int main() {
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
       break;
     case JMP:
-      bus = location;
+      regB = location;
       flags |= JUMP_FLAG;
       break;
     case JC:
       if (flags & CARRY_FLAG) {
-        bus = location;
+        regB = location;
         flags |= JUMP_FLAG;
       }
       break;
     case JZ:
       if (flags & ZERO_FLAG) {
-        bus = location;
+        regB = location;
         flags |= JUMP_FLAG;
       }
       break;
